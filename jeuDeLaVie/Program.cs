@@ -9,20 +9,37 @@ namespace jeuDeLaVie
         // Zone des variables globales
         static int[,] grille;
 
+        class Personne
+        {
+            int stadeMaladie;
+            int compteurInfections;
+            bool imunise;
+            bool confine;
+            bool existe;
+
+            public Personne(bool existe)
+            {
+                this.existe = existe;
+            }
+        }
+
         [STAThread()] // on utilise esilvGUI, esilvGUI est basé sur winForms, et la plateforme winForms nécéssite que tout les controlleurs soient géré par un et un seul Thread, STAThread (STA : Single-Threaded Apartment) permet de forcer le code a n'utiliser qu'un seul thread a l'inverse de la commande MTAThread.
         static void Main()
         {
             object[] param = RecupererParametre();
             int x = (int)param[0];
             int y = (int)param[1];
-            double t = (double)param[2];
-            int versionChoice = (int)param[3];
-            bool visuState = (bool)param[4];
-            int tailleCase = (int)param[5];
+            int versionChoice = (int)param[2];
+            double tauxContamination = (double)param[3];
+            double[] poidsStat = (double[])param[4];
+            double tauxConfinement = (double)param[5];
+            int tailleCase = (int)param[6];
+            double tauxDeRemplissage = (double)param[7];
+
 
             grille = new int[x, y];
-            InitGrille(x, y, t, versionChoice + 1); // on initialise la grille avec soit 1 soit 2 populations puisque choisir la version revient a avoir 0 dans versionChoice pour la version classique et 1 pour la variante.
-            Fenetre gui = new Fenetre(grille, tailleCase, 0, 0, "Jeu de la vie");
+            InitGrille(x, y, tauxDeRemplissage, versionChoice + 1); // on initialise la grille avec soit 1 soit 2 populations puisque choisir la version revient a avoir 0 dans versionChoice pour la version classique et 1 pour la variante.
+            Fenetre gui = new Fenetre(grille, tailleCase, 0, 0, "Jeu de la vie - Covid Edition");
 
             bool stop = false; // condition d'arret de la boucle.
             int gen = 1; // numéro de la génération en cours
@@ -94,7 +111,7 @@ namespace jeuDeLaVie
         }
         static object[] RecupererParametre()
         {
-            object[] res = new object[6];
+            object[] res = new object[8];
             int x, y;
             // On demande a l'utilisateur les dimensions de la grille souhaitée
             do
@@ -107,6 +124,7 @@ namespace jeuDeLaVie
             } while (x < 1 || y < 1);
             res[0] = x;
             res[1] = y;
+
             //on demande a l'utilisateur le taux de remplissage:
             double t;
             do
@@ -114,40 +132,137 @@ namespace jeuDeLaVie
                 Console.Write("Taux de remplissage [0,1 ; 0,9] > ");
                 double.TryParse(Console.ReadLine().Replace('.', ','), out t); // il faut remplacer les . dans le nombre si l'utilisateur en met parce que tryparse ne sait pas convertir un double contenant un point pour la virgule.
             } while (t == 0.0d || t < 0.1 || t > 0.9);
-            res[2] = t;
+            res[7] = t;
 
-            //on demande a l'utilisateur la taille des case du GUI
-            int tailleCase;
-            do
-            {
-                Console.Write("Taille des cases du GUI (> 1) > ");
-                int.TryParse(Console.ReadLine(), out tailleCase);
-            } while (tailleCase < 1);
-            res[5] = tailleCase;
-
-            //on demande à l'utilisateur quelle version du jeu il veut utiliser
+            // on demande a l'utilisateur le mode de la simulation:
             int versionChoice = -1;
             do
             {
-                Console.WriteLine("Menu Version :");
-                Console.WriteLine("[0]  Jeu DLV classique");
-                Console.WriteLine("[1]  Jeu DLV variante");
+                Console.WriteLine("Menu Mode :");
+                Console.WriteLine("[0]  Sans confinement");
+                Console.WriteLine("[1]  Avec confinement");
                 Console.Write("Votre choix > ");
                 int.TryParse(Console.ReadLine(), out versionChoice);
             } while (versionChoice == -1 || versionChoice > 1);
-            res[3] = versionChoice;
-            //on demande a l'utilisateur si il veut voir les étapes intermédiaires
-            int visuStateChoice = -1;
+            res[2] = versionChoice;
+
+            // on demande a l'utilisateur s'il veut du  mode avancé.
+            int advancedChoice = -1;
             do
             {
-                Console.WriteLine("Menu Visualisation :");
-                Console.WriteLine("[0]  Jeu DLV sans visualisation intermédiaire des états futurs ");
-                Console.WriteLine("[1]  Jeu DLV avec visualisation des états futurs (à naître et à mourir)");
-                Console.Write("Votre choix > ");
-                int.TryParse(Console.ReadLine(), out visuStateChoice);
-            } while (visuStateChoice == -1 || visuStateChoice > 1);
-            bool visuState = visuStateChoice == 0 ? false : true;
-            res[4] = visuState;
+                Console.Write("Mode avancé (permet de modifier les paramètres) [N/o] > ");
+                string c = Console.ReadLine().ToLower();
+                if( c == "n" || c == "non" || c == "no")
+                {
+                    advancedChoice = 0;
+                }
+                else if( c == "o" || c == "y" || c == "oui" || c == "yes")
+                {
+                    advancedChoice = 1;
+                }
+            } while (advancedChoice == -1);
+
+            double tauxContamination = 2.5;
+            double[] poidsStat = {0.6, 0.2, 0.1, 0,02};
+            double tauxConfinement = versionChoice == 0.0 ? 0.0 : 0.8;
+            int tailleCase = 0;
+            if (advancedChoice == 1)
+            {
+                // mode avancé
+
+                //on demande a l'utilisateur le taux de contamination:
+                double tauxContaminationAdvanced;
+                do
+                {
+                    Console.Write("Taux de contamination [par default : 2,5] > ");
+                    string c = Console.ReadLine();
+                    if(c != "")
+                    {
+                        if(!double.TryParse(c.Replace(".",","), out tauxContaminationAdvanced))
+                        {
+                            tauxContaminationAdvanced = 2.5;
+                        }
+                    }
+                    else
+                    {
+                        tauxContaminationAdvanced = 2.5;
+                    }
+
+                } while (tauxContaminationAdvanced == 0.0d || tauxContaminationAdvanced < 0);
+                tauxContamination = tauxContaminationAdvanced;
+
+                for(int i = 0; i <4; i++)
+                {
+                    double poidsStat0;
+                    do
+                    {
+                        Console.Write($"Poids statistique pour passer du stade {i} à {i+1} a la prochaine génération [{poidsStat[i] * 100}] > ");
+                        string c = Console.ReadLine();
+                        if (c != "")
+                        {
+                            if (double.TryParse(c.Replace(".", ","), out poidsStat0))
+                            {
+                                poidsStat0 /= 100;
+                            }
+                            else
+                            {
+                                poidsStat0 = poidsStat[i];
+                            }
+
+                        }
+                        else
+                        {
+                            poidsStat0 = poidsStat[i];
+                        }
+                    } while (poidsStat0 == 0.0d);
+                    poidsStat[i] = poidsStat0;
+                }
+
+                if(tauxConfinement != 0.0)
+                {
+                    double tauxConfinementAdvanced;
+                    do
+                    {
+                        Console.Write("Taux de confinement [80] > ");
+                        string c = Console.ReadLine();
+                        if (c != "")
+                        {
+                            if (!double.TryParse(c.Replace(".", ","), out tauxConfinementAdvanced))
+                            {
+                                tauxConfinementAdvanced = 0.8;
+                            }
+                            else
+                            {
+                                tauxConfinementAdvanced /= 100;
+                            }
+                        }
+                        else
+                        {
+                            tauxConfinementAdvanced = 0.8;
+                        }
+                    } while (tauxConfinementAdvanced == 0.0d || tauxConfinementAdvanced < 0);
+                    tauxConfinement = tauxConfinementAdvanced;
+                }
+
+                //on demande a l'utilisateur la taille des case du GUI
+                
+                do
+                {
+                    Console.Write("Taille des cases du GUI (> 1) > ");
+                    int.TryParse(Console.ReadLine(), out tailleCase);
+                } while (tailleCase < 1);
+                res[5] = tailleCase;
+
+
+            }
+            if(tailleCase == 0)
+            {
+                tailleCase = 20;
+            }
+            res[3] = tauxContamination;
+            res[4] = poidsStat;
+            res[5] = tauxConfinement;
+            res[6] = tailleCase;
             return res;
         }
         static bool ComparerGrilles(int[,] grille1, int[,] grilleC1, int[,] grilleC2)
@@ -162,10 +277,15 @@ namespace jeuDeLaVie
             }
             return res;
         }
-        static void InitGrille(int x, int y, double t, int nPop)
+
+        static void InitGrille(int x, int y, double tauxDeRemplissage)
+        {
+
+        }
+        static void InitGrille(int x, int y, double taux, double tauxMalades, int nPop)
         {
             int nCase = x * y; // nombre de cases total dans la grille
-            int n = (int)(t * nCase); // nombre de case a remplir pour atteindre le taux spécifié
+            int n = (int)(taux * nCase); // nombre de case a remplir pour atteindre le taux spécifié
             int currentColor = 1; //couleur de la cellule, on commence a 1 parce que la couleur 0 est le noir et comme le fond de la console est noir ce sera illisible, de plus dans notre système le chiffre zero est reservé pour les cellules mortes ou inexistantes
             for (int i = 0; i < nCase; i++)
             {
@@ -181,7 +301,15 @@ namespace jeuDeLaVie
                 grille[iLigne, iCol] = i < n ? currentColor : 0; // si i est dans l'interval [0,n[ alors la case doit contenir la valeur de currentColor (si on est en mode classique ce sera forcément 1, sinon ce sera soit 1 soit 2) parce qu'on est encore dans le cadre du taux fixé, sinon on met un 0.
                 currentColor++;
             }
-            //maintenant que la grille est remplit au taux fixé on la mélange
+            //maintenant que la grille est remplie au taux fixé ou rend malade le taux de personnes rentré en paramètres
+            int nMalades = (int)(tauxMalades * n);
+            for (int i = 0; i < nMalades; i++)
+            {
+                int iLigne = i / y;
+                int iCol = i % y;
+                grille[iLigne, iCol] = /*malade stade 0*/;
+            }
+            //maintenant que la grille est remplie au taux fixés on la mélange
             MelangerGrille();
             AfficherMatrice(grille);
         }
@@ -242,107 +370,6 @@ namespace jeuDeLaVie
                 }
             }
             return pop;
-        }
-        static int[] Evoluer(int x, int y)
-        {
-            int[] vie = new int[2];
-            int[] voisins = Voisins(x, y, 1);
-            int[] voisins2 = Voisins(x, y, 2);
-
-            if (grille[x, y] != 0) // règles R1b et R2b
-            {
-                if (voisins[grille[x, y] - 1] >= 2 && voisins[grille[x, y] - 1] <= 3) // si la cellule est vivante et a 2 ou 3 voisins de sa population alors elle reste vivante
-                {
-                    vie[0] = 1;
-                    vie[1] = grille[x, y];
-                }
-                else // sinon elle meurt
-                {
-                    vie[0] = 0;
-                    vie[1] = grille[x, y];
-                }
-            }
-            else // règles R3b et R4b
-            {
-                int nombreVoisins = 0;
-                foreach (int element in voisins) // compte le nombre de cellules voisines au rang 1 (toutes populations confondues)
-                {
-                    nombreVoisins += element;
-                }
-                if (nombreVoisins == 3) // s'il y a 3 celules voisines, regarde si elles sont toutes de la même famille [R3b]
-                {
-                    int famille = -1;
-                    for (int i = 0; i < voisins.Length; i++)
-                    {
-                        if (voisins[i] == 3)
-                        {
-                            famille = i + 1;
-                        }
-                    }
-                    if (famille != -1) // si les 3 cellules sont de la même famille, alors la cellule nait
-                    {
-                        vie[0] = 1;
-                        vie[1] = famille;
-                    }
-                    else // sinon elle reste morte
-                    {
-                        vie[0] = 0;
-                        vie[1] = grille[x, y];
-                    }
-                }
-                else if (nombreVoisins == 6) // s'il y a 6 cellules voisines, regarde si elles appartiennent à 2 familles avec 3 cellules par famille [R4b]
-                {
-                    int famille1 = -1;
-                    int famille2 = -1;
-                    int[] pop = PopulationTotale(grille);
-                    for (int i = 0; i < voisins.Length; i++)
-                    {
-                        if (voisins[i] == 3) // si 3 cellules appartiennent à une seule famille
-                        {
-                            if (famille1 == -1) // enregistre la première famille
-                            {
-                                famille1 = i + 1;
-                            }
-                            else // enregistre la deuxième famille
-                            {
-                                famille2 = i + 1;
-                            }
-                        }
-                    }
-                    if (famille1 != -1 && famille2 != -1) // si les 6 cellules voisines sont réparties dans 2 familles avec 3 cellules par familles
-                    {
-                        if (voisins2[famille1 - 1] > voisins2[famille2 - 1]) // s'il y a plus de cellules de la première famille que de la deuxième au rang 2 alors la cellule nait de la couleur de la première famille au tour prochain
-                        {
-                            vie[0] = 1;
-                            vie[1] = famille1;
-                        }
-                        else if (voisins2[famille1 - 1] < voisins2[famille2 - 1]) // s'il y a plus de cellules de la deuxième famille que de la première au rang 2 alors la cellule nait de la couleur de la deuxième famille au tour prochain
-                        {
-                            vie[0] = 1;
-                            vie[1] = famille2;
-                        }
-                        else if (pop[0] != pop[1]) // si il n'y a pas autant de cellules vivantes de chaque population
-                        {
-                            if (pop[0] > pop[1]) // s'il y a au total plus de cellules de la première famille que de la deuxième, alors la cellule nait et sera de la couleur de la première famille
-                            {
-                                vie[0] = 1;
-                                vie[1] = 1;
-                            }
-                            else if (pop[1] > pop[0]) // s'il y a au total plus de cellules de la deuxième famille que de la première, alors la cellule nait et sera de la couleur de la deuxième famille
-                            {
-                                vie[0] = 1;
-                                vie[1] = 2;
-                            }
-                        }
-                        else //sinon la cellule reste morte
-                        {
-                            vie[0] = 0;
-                            vie[1] = grille[x, y];
-                        }
-                    }
-                }
-            }
-            return vie;
         }
         static void AfficherMatrice(int[,] mat)
         {
@@ -413,6 +440,10 @@ namespace jeuDeLaVie
                 grille[iLigne, iCol] = grille[jLigne, jCol];
                 grille[jLigne, jCol] = temp;
             }
+        }
+        static /*truc*/ Evoluer (int x, int y)
+        {
+            
         }
     }
 }
