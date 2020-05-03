@@ -361,7 +361,7 @@ namespace jeuDeLaVie
                         }
                         if (grilleTemp[ti, tj] == stade.sain)
                         {
-                            bool contamine = Chance2(1/tauxContamination);
+                            bool contamine = Chance(1/tauxContamination);
                             if (contamine)
                             {
                                 res[n][0] = ti;
@@ -375,32 +375,22 @@ namespace jeuDeLaVie
             return res;
         }
 
-        static bool Chance2(double proba)
+        static bool Chance(double proba)
         {
-           int alea;
-           if(proba == 0){
-               alea = -1;
-           }else{
-               proba = 1/ proba;
-               alea = random.Next((int)proba);
-           }
-           return alea == 0;
-        }
-
-        static bool Chance(int probabilite)
-        {
-            bool res = false;
-            int chance = 0;
-            if (probabilite == 0)
+            bool test = false;
+            int alea = 0;
+            double nombre = 0;
+            if (proba == 0)
             {
-                chance = 1;
+                alea = -1;
             }
             else
             {
-                chance = random.Next(probabilite);
+                nombre = proba * 1000;
+                alea = random.Next(1000);
+                test = (alea < nombre) ? true : false;
             }
-            res = chance == 0;
-            return res;
+            return test;
         }
 
         static void Evoluer(int x, int y, double tauxContamination, double[] poidsStats, double tauxGuerison)
@@ -418,23 +408,23 @@ namespace jeuDeLaVie
                 }
                 if (grille[x, y] == stade.stade0)
                 {
-                    grilleTemp[x,y] = Chance2(tauxGuerison) ? stade.immunise : Chance2(poidsStats[0]) ? stade.stade1 : stade.stade0;
-                    //grilleTemp[x, y] = Chance2(poidsStats[0]) ? stade.stade1 : grilleTemp[x, y] = Chance2(tauxGuerison) ? stade.immunise : stade.stade0;
+                    grilleTemp[x,y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[0]) ? stade.stade1 : stade.stade0;
+                    //grilleTemp[x, y] = Chance(poidsStats[0]) ? stade.stade1 : grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : stade.stade0;
                 }
                 else if (grille[x, y] == stade.stade1)
                 {
-                    grilleTemp[x,y] = Chance2(tauxGuerison) ? stade.immunise : Chance2(poidsStats[1]) ? stade.stade2 : stade.stade1;
-                    //grilleTemp[x, y] = Chance2(poidsStats[1]) ? stade.stade2 : grilleTemp[x, y] = Chance2(tauxGuerison) ? stade.immunise : stade.stade1;
+                    grilleTemp[x,y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[1]) ? stade.stade2 : stade.stade1;
+                    //grilleTemp[x, y] = Chance(poidsStats[1]) ? stade.stade2 : grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : stade.stade1;
                 }
                 else if (grille[x, y] == stade.stade2)
                 {
-                    grilleTemp[x,y] = Chance2(tauxGuerison) ? stade.immunise : Chance2(poidsStats[2]) ? stade.stade3 : stade.stade2;
-                    //grilleTemp[x, y] = Chance2(poidsStats[2]) ? stade.stade3 : grilleTemp[x, y] = Chance2(tauxGuerison) ? stade.immunise : stade.stade2;
+                    grilleTemp[x,y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[2]) ? stade.stade3 : stade.stade2;
+                    //grilleTemp[x, y] = Chance(poidsStats[2]) ? stade.stade3 : grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : stade.stade2;
                 }
                 else if (grille[x, y] == stade.stade3)
                 {
-                    grilleTemp[x,y] = Chance2(tauxGuerison) ? stade.immunise : Chance2(poidsStats[3]) ? stade.mort : stade.stade3;
-                    //grilleTemp[x, y] = Chance2(poidsStats[3]) ? stade.mort : grilleTemp[x, y] = Chance2(tauxGuerison) ? stade.immunise : stade.stade3;
+                    grilleTemp[x,y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[3]) ? stade.mort : stade.stade3;
+                    //grilleTemp[x, y] = Chance(poidsStats[3]) ? stade.mort : grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : stade.stade3;
                 }
             }
         }
