@@ -9,8 +9,13 @@ namespace jeuDeLaVie
         // Zone des variables globales
         static int[,] grille;
         static int[,] grilleTemp;
+        static int gen = 1;
+
+        static int[,] guerisonGrille;
+
+        static int stadeDeconfinement;
         public class Stade
-        { //permet d'associer un stade comprehensible par un humain avec une couleur de la GUI.
+        { //permet d'associer un stade comprehensible par un humain avec une couleur du GUI.
             public int sain = 4;
             public int stade0 = 2;
             public int stade1 = 5;
@@ -18,7 +23,7 @@ namespace jeuDeLaVie
             public int stade3 = 3;
             public int mort = 1;
             public int immunise = 0;
-
+            public int confine = 7;
             public Stade()
             {
 
@@ -32,22 +37,21 @@ namespace jeuDeLaVie
         [STAThread()] // on utilise esilvGUI, esilvGUI est basé sur winForms, et la plateforme winForms nécéssite que tout les controlleurs soient géré par un et un seul Thread, STAThread (STA : Single-Threaded Apartment) permet de forcer le code a n'utiliser qu'un seul thread a l'inverse de la commande MTAThread.
         static void Main()
         {
-            object[] param = RecupererParametre();
-            int x = (int)param[0];
-            int y = (int)param[1];
-            int versionChoice = (int)param[2];
-            double tauxContamination = (double)param[3];
-            double[] poidsStat = (double[])param[4];
-            double tauxConfinement = (double)param[5];
-            int tailleCase = (int)param[6];
-            double tauxGuerison = (double)param[7];
-            int nombrePatientsZero = (int)param[8];
-            Console.WriteLine($" x:y : {x}:{y} | versionChoice : {versionChoice} | tauxDeContamination : {tauxContamination} | poidsStat : {string.Join(";", poidsStat)} | taux de Confinement : {tauxConfinement} | tailleCase : {tailleCase}");
-            InitGrille(x, y, nombrePatientsZero);
+            dynamic[] param = RecupererParametre(); // la fonction RecupererParametre renvoit un tableau d'objet dynamique, cela peut etre des ints, des doubles, ou tout autre type possible. Cela a à la fois des avantages et des inconvéniants, ça à l'avantage de pouvoir renvoyer tout type de variable sans devoir se focaliser sur un seul type (ex: utiliser des strings pour des valeurs qui étaient des ints et des bools), mais ça à comme incovéniant majeur que le compilateur ne peut pas vérifier si on essaye pas d'attribuer une valeur booléenne à une variable int.
+            int x = param[0];
+            int y = param[1];
+            int versionChoice = param[2];
+            double tauxContamination = param[3];
+            double[] poidsStat = param[4];
+            double tauxConfinement = param[5];
+            int tailleCase = param[6];
+            double tauxGuerison = param[7];
+            int nombrePatientsZero = param[8];
+            stadeDeconfinement = param[9];
+            InitGrille(x, y, nombrePatientsZero, tauxConfinement);
             gui = new Fenetre(grille, tailleCase, 0, 0, "Jeu de la vie - COVID");
             AfficherMatrice(grille);
             Console.ReadKey();
-            int gen = 1;
             bool stop = false;
             while (!stop)
             {
@@ -71,17 +75,30 @@ namespace jeuDeLaVie
                 //Console.WriteLine("apres");
                 //AfficherMatrice(grille);
                 gui.RafraichirTout();
+                int[] pop = Population();
+                gui.changerMessage("Génération " + gen + " | sains non-immunisés : " + pop[0] + " | sains immunisés : " + pop[6] + " | stade 0 : " + pop[1] + " | stade 1 : " + pop[2] + " | stade 2 : " + pop[3] + " | stade 3 : " + pop[4] + " | morts : " + pop[5] + " | confinés : " + pop[7]);
                 System.Threading.Thread.Sleep(500);
                 //Console.ReadKey();
+
+                
+
                 gen++;
+
+                
+
+                if(pop[1] == 0 && pop[2] == 0 && pop[3] == 0 && pop[4] == 0){
+                    //il n'y a plus de malade, on a atteint la stabilité
+                    stop=true;
+                }
 
             }
             Console.ReadKey();
 
         }
-        static object[] RecupererParametre()
+        static dynamic[] RecupererParametre()
         {
-            object[] res = new object[9];
+            //List<dynamic> res = new List<dynamic>(9);
+            dynamic[] res = new dynamic[10];
             int x, y;
             // On demande a l'utilisateur les dimensions de la grille souhaitée
             do
@@ -129,6 +146,7 @@ namespace jeuDeLaVie
             int tailleCase = 0;
             double tauxGuerison = 0.3;
             int nombrePatientsZero = 1;
+            int stadeDeconfinement = -1;
             if (advancedChoice == 1)
             {
                 // mode avancé
@@ -205,6 +223,25 @@ namespace jeuDeLaVie
                         }
                     } while (tauxConfinementAdvanced == 0.0d || tauxConfinementAdvanced < 0);
                     tauxConfinement = tauxConfinementAdvanced;
+
+                    int stadeDeconfinementAdvanced;
+                    do
+                    {
+                        Console.Write("Stade de déconfinement > ");
+                        string c = Console.ReadLine();
+                        if (c != "")
+                        {
+                            if (!int.TryParse(c.Replace(".", ","), out stadeDeconfinementAdvanced))
+                            {
+                                stadeDeconfinementAdvanced = -1;
+                            }
+                        }
+                        else
+                        {
+                            stadeDeconfinementAdvanced = -1;
+                        }
+                    } while (tauxConfinementAdvanced <= 0);
+                    stadeDeconfinement = stadeDeconfinementAdvanced;
                 }
 
                 double tauxGuerisonAdvanced;
@@ -259,21 +296,40 @@ namespace jeuDeLaVie
             res[6] = tailleCase;
             res[7] = tauxGuerison;
             res[8] = nombrePatientsZero;
+            res[9] = stadeDeconfinement;
             return res;
         }
 
 
-        static void InitGrille(int x, int y, int nombrePatientsZero)
+        static void InitGrille(int x, int y, int nombrePatientsZero, double tauxConfinement)
         {
 
             grille = new int[x, y];
-            for (int i = 0; i < x; i++)
+            guerisonGrille = new int[x, y];
+            for (int i = 0; i < x * y; i++)
             {
-                for (int j = 0; j < y; j++)
-                {
-                    grille[i, j] = stade.sain;
-                }
+                int iLigne = i / y;
+                int iCol = i % y;
+                guerisonGrille[iLigne, iCol] = 5;
             }
+
+            int nombreConfine = (int)(x * y * tauxConfinement);
+
+            for (int i = 0; i < nombreConfine; i++)
+            {
+                int iLigne = i / y;
+                int iCol = i % y;
+                grille[iLigne, iCol] = stade.confine;
+            }
+
+            for (int i = nombreConfine; i < x * y; i++)
+            {
+                int iLigne = i / y;
+                int iCol = i % y;
+                grille[iLigne, iCol] = stade.sain;
+
+            }
+            MelangerGrille();
             for (int i = 0; i < nombrePatientsZero; i++)
             {
                 int individuZeroX = random.Next(x);
@@ -329,7 +385,7 @@ namespace jeuDeLaVie
 
             }
 
-            if (grille[x, y] != stade.mort && grille[x, y] != stade.immunise)
+            if (grille[x, y] != stade.mort && grille[x, y] != stade.immunise && grille[x, y] != stade.confine)
             {
                 int nLignes = grille.GetUpperBound(0) + 1; // GetUpperBound => on récupère l'index du dernier élements de la dimension n (ici 0)
                 int nCols = grille.GetUpperBound(1) + 1;
@@ -361,7 +417,7 @@ namespace jeuDeLaVie
                         }
                         if (grilleTemp[ti, tj] == stade.sain)
                         {
-                            bool contamine = Chance(1/tauxContamination);
+                            bool contamine = Chance(1 / tauxContamination);
                             if (contamine)
                             {
                                 res[n][0] = ti;
@@ -395,6 +451,9 @@ namespace jeuDeLaVie
 
         static void Evoluer(int x, int y, double tauxContamination, double[] poidsStats, double tauxGuerison)
         {
+            if(gen == stadeDeconfinement && grille[x,y] == stade.confine){
+                    grilleTemp[x,y] = stade.sain;
+            }
             if (grille[x, y] == stade.stade0 || grille[x, y] == stade.stade1 || grille[x, y] == stade.stade2 || grille[x, y] == stade.stade3) //si la cellule est malade...
             {
                 int[][] contaminer = Contaminer(x, y, tauxContamination);
@@ -408,23 +467,118 @@ namespace jeuDeLaVie
                 }
                 if (grille[x, y] == stade.stade0)
                 {
-                    grilleTemp[x,y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[0]) ? stade.stade1 : stade.stade0;
-                    //grilleTemp[x, y] = Chance(poidsStats[0]) ? stade.stade1 : grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : stade.stade0;
+                    
+                    if (guerisonGrille[x, y] != 5)
+                    {
+                        // on est dans le cycle de guérison
+                        guerisonGrille[x, y]--;
+                        if (guerisonGrille[x, y] == 0)
+                        {
+                            grilleTemp[x, y] = stade.immunise;
+                        }
+                    }
+                    else
+                    {
+                        if (Chance(poidsStats[0]))
+                        {
+                            grilleTemp[x, y] = stade.stade1;
+                            guerisonGrille[x,y] += 5;
+                        }
+                        else
+                        {
+                            if (Chance(tauxGuerison))
+                            {
+                                guerisonGrille[x, y]--;
+                            }
+                        }
+                    }
                 }
                 else if (grille[x, y] == stade.stade1)
                 {
-                    grilleTemp[x,y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[1]) ? stade.stade2 : stade.stade1;
-                    //grilleTemp[x, y] = Chance(poidsStats[1]) ? stade.stade2 : grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : stade.stade1;
+                    if (guerisonGrille[x, y] != 10)
+                    {
+                        // on est dans le cycle de guérison
+                        guerisonGrille[x, y]--;
+                        if (guerisonGrille[x, y] == 0)
+                        {
+                            grilleTemp[x, y] = stade.immunise;
+                        }
+                    }
+                    else
+                    {
+                        if (Chance(poidsStats[1]))
+                        {
+                            grilleTemp[x, y] = stade.stade2;
+                            guerisonGrille[x,y] += 5;
+                        }
+                        else
+                        {
+                            if (Chance(tauxGuerison))
+                            {
+                                guerisonGrille[x, y]--;
+                            }
+                        }
+                    }
+                    //grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[1]) ? stade.stade2 : stade.stade1;
+                    //grilleTemp[x, y] = Chance(poidsStats[1]) ? stade.stade2 : Chance(tauxGuerison) ? stade.immunise : stade.stade1;
                 }
                 else if (grille[x, y] == stade.stade2)
                 {
-                    grilleTemp[x,y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[2]) ? stade.stade3 : stade.stade2;
-                    //grilleTemp[x, y] = Chance(poidsStats[2]) ? stade.stade3 : grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : stade.stade2;
+                    if (guerisonGrille[x, y] != 15)
+                    {
+                        // on est dans le cycle de guérison
+                        guerisonGrille[x, y]--;
+                        if (guerisonGrille[x, y] == 0)
+                        {
+                            grilleTemp[x, y] = stade.immunise;
+                        }
+                    }
+                    else
+                    {
+                        if (Chance(poidsStats[2]))
+                        {
+                            grilleTemp[x, y] = stade.stade3;
+                            guerisonGrille[x,y] += 5;
+                        }
+                        else
+                        {
+                            if (Chance(tauxGuerison))
+                            {
+                                guerisonGrille[x, y]--;
+                            }
+                        }
+                    }
+                    //grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[2]) ? stade.stade3 : stade.stade2;
+                    //grilleTemp[x, y] = Chance(poidsStats[2]) ? stade.stade3 : Chance(tauxGuerison) ? stade.immunise : stade.stade2;
                 }
                 else if (grille[x, y] == stade.stade3)
                 {
-                    grilleTemp[x,y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[3]) ? stade.mort : stade.stade3;
-                    //grilleTemp[x, y] = Chance(poidsStats[3]) ? stade.mort : grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : stade.stade3;
+                    if (guerisonGrille[x, y] != 20)
+                    {
+                        // on est dans le cycle de guérison
+                        guerisonGrille[x, y]--;
+                        if (guerisonGrille[x, y] == 0)
+                        {
+                            grilleTemp[x, y] = stade.immunise;
+                        }
+                    }
+                    else
+                    {
+                        if (Chance(poidsStats[3]))
+                        {
+                            grilleTemp[x, y] = stade.mort;
+                            guerisonGrille[x,y] += 5;
+                        }
+                        else
+                        {
+                            if (Chance(tauxGuerison))
+                            {
+                                guerisonGrille[x, y]--;
+                            }
+                        }
+                    }
+                    //grilleTemp[x, y] = Chance(tauxGuerison) ? stade.immunise : Chance(poidsStats[3]) ? stade.mort : stade.stade3;
+                    //grilleTemp[x, y] = Chance(poidsStats[3]) ? stade.mort : Chance(tauxGuerison) ? stade.immunise : stade.stade3;
                 }
             }
         }
@@ -487,6 +641,46 @@ namespace jeuDeLaVie
                 grille[iLigne, iCol] = grille[jLigne, jCol];
                 grille[jLigne, jCol] = temp;
             }
+        }
+        static int[] Population()
+        {
+            int[] pop = new int[8];
+            foreach (int item in grille)
+            {
+                if (item == stade.sain)
+                {
+                    pop[0] += 1;
+                }
+                else if (item == stade.stade0)
+                {
+                    pop[1] += 1;
+                }
+                else if (item == stade.stade1)
+                {
+                    pop[2] += 1;
+                }
+                else if (item == stade.stade2)
+                {
+                    pop[3] += 1;
+                }
+                else if (item == stade.stade3)
+                {
+                    pop[4] += 1;
+                }
+                else if (item == stade.mort)
+                {
+                    pop[5] += 1;
+                }
+                else if (item == stade.immunise)
+                {
+                    pop[6] += 1;
+                }
+                else if (item == stade.confine)
+                {
+                    pop[7] += 1;
+                }
+            }
+            return pop;
         }
     }
 }
